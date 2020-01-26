@@ -1,0 +1,66 @@
+name: Node.js Build and Deploy
+
+on: [push]
+
+jobs:
+  deploy-app:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [12.x]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: butlerlogic/action-autotag@1.0.2
+      if: github.ref == 'refs/heads/master'
+      with:
+        GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: Install dependencies
+      run: npm ci
+    - name: Run tests
+      run: npm test
+      env:
+        CI: true
+    - uses: actions/setup-python@v1
+      if: github.ref == 'refs/heads/master'
+      with:
+        python-version: '3.7'
+    - name: Install aws-cli
+      if: github.ref == 'refs/heads/master'
+      run: |
+        set -x
+        pip3 install --user awscli
+        which aws
+        aws --version
+    - name: archive lambda code
+      if: github.ref == 'refs/heads/master'
+      run: |
+        set -x
+        zip -r lambda.zip .
+    - name: fetch tags
+      run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+      if: github.ref == 'refs/heads/master'
+    - name: Upload lambda code to s3
+      if: github.ref == 'refs/heads/master'
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        set -x
+        aws s3 cp lambda.zip s3://${{ secrets.bucket_name }}/code/master/lambda.zip
+        aws s3 cp lambda.zip s3://${{ secrets.bucket_name }}/code/master/$GITHUB_SHA/lambda.zip
+
+        echo "checking if there is are git tags on HEAD ..."
+        GIT_TAGS=$(git tag --points-at HEAD)
+        if [ -n "$GIT_TAGS" ] ; then
+          for tag in $GIT_TAGS
+          do
+            echo "tag was found for this commit: $tag"
+            aws s3 cp lambda.zip s3://${{ secrets.bucket_name }}/code/master/$tag/lambda.zip
+          done
+        else
+          echo "no tags on this commit, skipping..."
+        fi

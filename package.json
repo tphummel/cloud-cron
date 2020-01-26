@@ -1,0 +1,17 @@
+{
+  "name": "",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "standard && NODE_ENV=test tape test.js",
+    "fix": "standard --fix"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "standard": "latest",
+    "tape": "latest"
+  },
+  "dependencies": {}
+}
